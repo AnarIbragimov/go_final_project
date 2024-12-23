@@ -95,12 +95,11 @@ func GetTasks(dbName string, search string) ([]Task, error) {
 		arguments = append(arguments, search)
 	} else {
 		query = "SELECT * FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date LIMIT 50"
-		search = "'%" + search + "%'"
+		search = "%" + search + "%"
 		arguments = append(arguments, search, search)
 	}
 
 	rows, err := db.Query(query, arguments...)
-	fmt.Println(query, arguments)
 	if err != nil {
 		return []Task{}, fmt.Errorf("failed to find tasks in DB: %w", err)
 	}
@@ -119,7 +118,24 @@ func GetTasks(dbName string, search string) ([]Task, error) {
 	if err := rows.Err(); err != nil {
 		return []Task{}, err
 	}
-	fmt.Println(tasks)
 
 	return tasks, nil
+}
+
+func GetTaskByID(dbName string, id string) ([]Task, error) {
+	db, err := sql.Open("sqlite", dbName)
+	if err != nil {
+		return []Task{}, fmt.Errorf("failed to open db file: %w", err)
+	}
+	defer db.Close()
+
+	var task Task
+
+	row := db.QueryRow("SELECT * FROM scheduler WHERE id = ?", id)
+	err = row.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	if err != nil {
+		return []Task{}, err
+	}
+
+	return []Task{task}, nil
 }

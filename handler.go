@@ -79,16 +79,45 @@ func (app *App) TaskHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodGet:
-		search := r.FormValue("search")
-		tasks, _ := GetTasks(app.DB, search)
-		response := map[string][]Task{"tasks": tasks}
-		if tasks == nil {
-			response["tasks"] = []Task{}
-		}
+		var tasks []Task
+		query := r.URL.Query()
+		id, ok := query["id"]
+		switch ok {
+		case true:
+			fmt.Println(id)
+			if len(id) == 0 {
+				http.Error(w, `{"error": "Не указан идентификатор"}`, http.StatusBadRequest)
+				return
+			}
+			tasks, err := GetTaskByID(app.DB, id[0])
+			fmt.Println(tasks)
+			if err != nil {
+				http.Error(w, `{"error": "Задача не найдена"}`, http.StatusBadRequest)
+				return
+			}
 
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
-			return
+			response := map[string][]Task{"tasks": tasks}
+			if tasks == nil {
+				response["tasks"] = []Task{}
+			}
+
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+				return
+			}
+		case false:
+			search := r.FormValue("search")
+			tasks, _ = GetTasks(app.DB, search)
+
+			response := map[string][]Task{"tasks": tasks}
+			if tasks == nil {
+				response["tasks"] = []Task{}
+			}
+
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 }
