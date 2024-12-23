@@ -8,7 +8,7 @@ import (
 )
 
 type Task struct {
-	ID      int    `json:"id"`
+	ID      string `json:"id"`
 	Date    string `json:"date"`
 	Title   string `json:"title"`
 	Comment string `json:"comment"`
@@ -59,7 +59,6 @@ func (app *App) TaskHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
 			return
 		}
-		fmt.Println(task)
 
 		if err := task.Validate(); err != nil {
 			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
@@ -68,7 +67,8 @@ func (app *App) TaskHandler(w http.ResponseWriter, r *http.Request) {
 
 		id, err := AddTask(app.DB, task)
 		if err != nil {
-			http.Error(w, `{"error": "Database error"}`, http.StatusInternalServerError)
+			errText := fmt.Sprintf(`{"error": "DB Error adding task: %s"}`, err.Error())
+			http.Error(w, errText, http.StatusInternalServerError)
 			return
 		}
 
@@ -79,14 +79,13 @@ func (app *App) TaskHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodGet:
-		tasks, err := GetTasks(app.DB)
-		if err != nil {
-			http.Error(w, `{"error": "Database error"}`, http.StatusInternalServerError)
-			return
-		}
+		tasks, _ := GetTasks(app.DB)
 		fmt.Println(tasks)
-
 		response := map[string][]Task{"tasks": tasks}
+		if tasks == nil {
+			response["tasks"] = []Task{}
+		}
+
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
 			return

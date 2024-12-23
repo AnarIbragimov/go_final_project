@@ -78,30 +78,31 @@ func AddTask(dbName string, task Task) (int64, error) {
 func GetTasks(dbName string) ([]Task, error) {
 	db, err := sql.Open("sqlite", dbName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open db file: %w", err)
+		return []Task{}, fmt.Errorf("failed to open db file: %w", err)
 	}
 	defer db.Close()
+
+	var tasks []Task
 
 	query := "SELECT * FROM scheduler ORDER BY date LIMIT 50"
 	rows, err := db.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find tasks in DB: %w", err)
+		return []Task{}, fmt.Errorf("failed to find tasks in DB: %w", err)
 	}
 	defer rows.Close()
 
-	var tasks []Task
 	for rows.Next() {
 		var task Task
-		err := rows.Scan(&task)
+		err := rows.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 		if err != nil {
-			return nil, err
+			return []Task{}, err
 		}
 
 		tasks = append(tasks, task)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return []Task{}, err
 	}
 
 	return tasks, nil
