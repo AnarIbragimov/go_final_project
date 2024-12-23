@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -75,7 +76,7 @@ func AddTask(dbName string, task Task) (int64, error) {
 	return id, nil
 }
 
-func GetTasks(dbName string) ([]Task, error) {
+func GetTasks(dbName string, search string) ([]Task, error) {
 	db, err := sql.Open("sqlite", dbName)
 	if err != nil {
 		return []Task{}, fmt.Errorf("failed to open db file: %w", err)
@@ -83,9 +84,23 @@ func GetTasks(dbName string) ([]Task, error) {
 	defer db.Close()
 
 	var tasks []Task
+	var query string
+	var arguments []any
 
-	query := "SELECT * FROM scheduler ORDER BY date LIMIT 50"
-	rows, err := db.Query(query)
+	if search == "" {
+		query = "SELECT * FROM scheduler ORDER BY date LIMIT 50"
+	} else if date, err := time.Parse("02.01.2006", search); err == nil {
+		search = date.Format("20060102")
+		query = "SELECT * FROM scheduler WHERE date = ? LIMIT 50"
+		arguments = append(arguments, search)
+	} else {
+		query = "SELECT * FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date LIMIT 50"
+		search = "'%" + search + "%'"
+		arguments = append(arguments, search, search)
+	}
+
+	rows, err := db.Query(query, arguments...)
+	fmt.Println(query, arguments)
 	if err != nil {
 		return []Task{}, fmt.Errorf("failed to find tasks in DB: %w", err)
 	}
@@ -104,6 +119,7 @@ func GetTasks(dbName string) ([]Task, error) {
 	if err := rows.Err(); err != nil {
 		return []Task{}, err
 	}
+	fmt.Println(tasks)
 
 	return tasks, nil
 }

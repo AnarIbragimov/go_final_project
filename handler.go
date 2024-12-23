@@ -79,8 +79,8 @@ func (app *App) TaskHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodGet:
-		tasks, _ := GetTasks(app.DB)
-		fmt.Println(tasks)
+		search := r.FormValue("search")
+		tasks, _ := GetTasks(app.DB, search)
 		response := map[string][]Task{"tasks": tasks}
 		if tasks == nil {
 			response["tasks"] = []Task{}
