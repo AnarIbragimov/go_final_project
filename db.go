@@ -122,10 +122,10 @@ func GetTasks(dbName string, search string) ([]Task, error) {
 	return tasks, nil
 }
 
-func GetTaskByID(dbName string, id string) ([]Task, error) {
+func GetTaskByID(dbName string, id string) (Task, error) {
 	db, err := sql.Open("sqlite", dbName)
 	if err != nil {
-		return []Task{}, fmt.Errorf("failed to open db file: %w", err)
+		return Task{}, fmt.Errorf("failed to open db file: %w", err)
 	}
 	defer db.Close()
 
@@ -134,8 +134,44 @@ func GetTaskByID(dbName string, id string) ([]Task, error) {
 	row := db.QueryRow("SELECT * FROM scheduler WHERE id = ?", id)
 	err = row.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
-		return []Task{}, err
+		return Task{}, err
 	}
 
-	return []Task{task}, nil
+	return task, nil
+}
+
+func UpdateTask(dbName string, task Task) error {
+	db, err := sql.Open("sqlite", dbName)
+	if err != nil {
+		return fmt.Errorf("failed to open db file: %w", err)
+	}
+	defer db.Close()
+
+	result, err := db.Exec("UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?", task.Date, task.Title, task.Comment, task.Repeat, task.ID)
+	if err != nil {
+		return err
+	}
+	if res, _ := result.RowsAffected(); res == 0 {
+		return fmt.Errorf("No task found")
+	}
+
+	return nil
+}
+
+func DeleteTask(dbName string, id string) error {
+	db, err := sql.Open("sqlite", dbName)
+	if err != nil {
+		return fmt.Errorf("failed to open db file: %w", err)
+	}
+	defer db.Close()
+
+	result, err := db.Exec("DELETE FROM scheduler WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	if res, _ := result.RowsAffected(); res == 0 {
+		return fmt.Errorf("No task found")
+	}
+
+	return nil
 }

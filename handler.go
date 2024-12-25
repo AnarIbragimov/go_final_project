@@ -30,13 +30,15 @@ func (t *Task) Validate() error {
 		return fmt.Errorf("Wrong date format: %s", t.Date)
 	}
 
-	if referenceDate.Before(today) && t.Repeat == "" {
-		t.Date = time.Now().Format("20060102")
+	if referenceDate.Before(today) {
+		t.Date = today.Format("20060102")
+	}
+
+	if t.Repeat == "" {
 		return nil
 	}
 
-	t.Date, err = NextDate(today, t.Date, t.Repeat)
-	if err != nil {
+	if _, err := NextDate(today, t.Date, t.Repeat); err != nil {
 		return err
 	}
 
@@ -51,6 +53,7 @@ type App struct {
 func (app *App) TaskHandler(w http.ResponseWriter, r *http.Request) {
 	var task Task
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	id := r.FormValue("id")
 
 	switch r.Method {
 	case http.MethodPost:
@@ -79,45 +82,135 @@ func (app *App) TaskHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodGet:
-		var tasks []Task
-		query := r.URL.Query()
-		id, ok := query["id"]
-		switch ok {
-		case true:
-			fmt.Println(id)
-			if len(id) == 0 {
-				http.Error(w, `{"error": "Не указан идентификатор"}`, http.StatusBadRequest)
-				return
-			}
-			tasks, err := GetTaskByID(app.DB, id[0])
-			fmt.Println(tasks)
-			if err != nil {
-				http.Error(w, `{"error": "Задача не найдена"}`, http.StatusBadRequest)
-				return
-			}
+		if id == "" {
+			http.Error(w, `{"error": "Не указан идентификатор"}`, http.StatusBadRequest)
+			return
+		}
 
-			response := map[string][]Task{"tasks": tasks}
-			if tasks == nil {
-				response["tasks"] = []Task{}
-			}
+		task, err := GetTaskByID(app.DB, id)
+		if err != nil {
+			http.Error(w, `{"error": "Задача не найдена"}`, http.StatusBadRequest)
+			return
+		}
 
-			if err := json.NewEncoder(w).Encode(response); err != nil {
-				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
-				return
-			}
-		case false:
-			search := r.FormValue("search")
-			tasks, _ = GetTasks(app.DB, search)
+		if err := json.NewEncoder(w).Encode(task); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
 
-			response := map[string][]Task{"tasks": tasks}
-			if tasks == nil {
-				response["tasks"] = []Task{}
-			}
+	case http.MethodPut:
+		err := json.NewDecoder(r.Body).Decode(&task)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
 
-			if err := json.NewEncoder(w).Encode(response); err != nil {
-				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
-				return
-			}
+		if err := task.Validate(); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+
+		err = UpdateTask(app.DB, task)
+		if err != nil {
+			http.Error(w, `{"error": "Task not found"}`, http.StatusBadRequest)
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+	case http.MethodDelete:
+		err := DeleteTask(app.DB, id)
+		if err != nil {
+			http.Error(w, `{"error": "Could not delete task"}`, http.StatusInternalServerError)
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+			return
 		}
 	}
+}
+
+func (app *App) TasksHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+
+	search := r.FormValue("search")
+	tasks, _ := GetTasks(app.DB, search)
+
+	response := map[string][]Task{"tasks": tasks}
+	if tasks == nil {
+		response["tasks"] = []Task{}
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (app *App) TaskDoneHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	id := r.FormValue("id")
+
+	task, err := GetTaskByID(app.DB, id)
+	if err != nil {
+		http.Error(w, `{"error": "Задача не найдена"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := task.Validate(); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	switch task.Repeat {
+	case "":
+		err = DeleteTask(app.DB, id)
+		if err != nil {
+			http.Error(w, `{"error": "Could not delete task"}`, http.StatusInternalServerError)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+	default:
+		now := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local)
+		task.Date, err = NextDate(now, task.Date, task.Repeat)
+		if err != nil {
+			http.Error(w, `{"error": "Could not update task"}`, http.StatusInternalServerError)
+			return
+		}
+		err = UpdateTask(app.DB, task)
+		if err != nil {
+			http.Error(w, `{"error": "Could not update task"}`, http.StatusInternalServerError)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+func (app *App) TaskNextDateHandler(w http.ResponseWriter, r *http.Request) {
+	now := r.FormValue("now")
+	date := r.FormValue("date")
+	repeat := r.FormValue("repeat")
+
+	nowTime, err := time.Parse("20060102", now)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	result, err := NextDate(nowTime, date, repeat)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+	}
+
+	w.Write([]byte(result))
 }

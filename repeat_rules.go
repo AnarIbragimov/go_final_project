@@ -14,11 +14,8 @@ type Repeat interface {
 type RepYear []string
 
 func (ry RepYear) CreateDate(now, date time.Time) (string, error) {
-	if date.After(now) {
-		return date.Format("20060102"), nil
-	}
 	result := date.AddDate(1, 0, 0)
-	for result.Before(now) {
+	for result.Before(now) || result.Equal(now) {
 		result = result.AddDate(1, 0, 0)
 	}
 	return result.Format("20060102"), nil
@@ -27,12 +24,12 @@ func (ry RepYear) CreateDate(now, date time.Time) (string, error) {
 type RepDay []string
 
 func (rd RepDay) CreateDate(now, date time.Time) (string, error) {
-	if date.After(now) {
-		return date.Format("20060102"), nil
-	}
 	numberOfDays, err := strconv.Atoi(rd[1])
 	if err != nil {
 		return "", fmt.Errorf("wrong day format: %w", err)
+	}
+	if numberOfDays > 400 {
+		return "", fmt.Errorf("wrong day format: can't be more than 400 days")
 	}
 
 	if numberOfDays == 1 && now.After(date) {
@@ -40,7 +37,7 @@ func (rd RepDay) CreateDate(now, date time.Time) (string, error) {
 	}
 
 	result := date.AddDate(0, 0, numberOfDays)
-	for result.Before(now) {
+	for result.Before(now) || result.Equal(now) {
 		result = result.AddDate(0, 0, numberOfDays)
 	}
 	return result.Format("20060102"), nil
@@ -49,9 +46,6 @@ func (rd RepDay) CreateDate(now, date time.Time) (string, error) {
 type RepWeek []string
 
 func (rw RepWeek) CreateDate(now, date time.Time) (string, error) {
-	if date.After(now) {
-		return date.Format("20060102"), nil
-	}
 	validDates := make([]time.Time, 0)
 	var weekDays []int
 	for _, weekDay := range strings.Split(rw[1], ",") {
@@ -65,8 +59,8 @@ func (rw RepWeek) CreateDate(now, date time.Time) (string, error) {
 	for _, weekDay := range weekDays {
 		numberOfDays := (weekDay - int(date.Weekday()) + 7) % 7
 		validDate := date.AddDate(0, 0, numberOfDays)
-		for validDate.Before(now) {
-			validDate = validDate.AddDate(0, 0, numberOfDays)
+		for validDate.Before(now) || validDate.Equal(now) {
+			validDate = validDate.AddDate(0, 0, 7)
 		}
 		validDates = append(validDates, validDate)
 	}
@@ -84,9 +78,6 @@ func (rw RepWeek) CreateDate(now, date time.Time) (string, error) {
 type RepAnyMonth []string
 
 func (ram RepAnyMonth) CreateDate(now, date time.Time) (string, error) {
-	if date.After(now) {
-		return date.Format("20060102"), nil
-	}
 	validDates := make([]time.Time, 0)
 	var monthDays []int
 	for _, monthDay := range strings.Split(ram[1], ",") {
@@ -106,9 +97,12 @@ func (ram RepAnyMonth) CreateDate(now, date time.Time) (string, error) {
 			validDate = time.Date(date.Year(), date.Month()+1, 0, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
 		default:
 			validDate = time.Date(date.Year(), date.Month(), monthDay, 0, 0, 0, 0, time.UTC)
+			if validDate.Month() != date.Month() {
+				validDate = time.Date(date.Year(), date.Month()+1, monthDay, 0, 0, 0, 0, time.UTC)
+			}
 		}
 
-		for validDate.Before(now) {
+		for validDate.Before(now) || validDate.Equal(now) {
 			month := int(validDate.Month()) + 1
 			year := validDate.Year()
 			if month > 12 {
@@ -133,9 +127,6 @@ func (ram RepAnyMonth) CreateDate(now, date time.Time) (string, error) {
 type RepConcreteMonth []string
 
 func (rcm RepConcreteMonth) CreateDate(now, date time.Time) (string, error) {
-	if date.After(now) {
-		return date.Format("20060102"), nil
-	}
 	validDates := make([]time.Time, 0)
 	var monthDays []int
 	var months []time.Month
@@ -167,7 +158,7 @@ func (rcm RepConcreteMonth) CreateDate(now, date time.Time) (string, error) {
 				validDate = time.Date(date.Year(), month, monthDay, 0, 0, 0, 0, time.UTC)
 			}
 
-			for validDate.Before(now) {
+			for validDate.Before(now) || validDate.Equal(now) {
 				validDate = validDate.AddDate(1, 0, 0)
 			}
 			validDates = append(validDates, validDate)
@@ -187,10 +178,6 @@ func (rcm RepConcreteMonth) CreateDate(now, date time.Time) (string, error) {
 func NextDate(now time.Time, date string, repeat string) (string, error) {
 	var result string
 	var dates Repeat
-
-	if repeat == "" {
-		return date, nil
-	}
 
 	referenceDate, err := time.Parse("20060102", date)
 	if err != nil {
