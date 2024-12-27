@@ -18,7 +18,7 @@ func (ry RepYear) CreateDate(now, date time.Time) (string, error) {
 	for result.Before(now) || result.Equal(now) {
 		result = result.AddDate(1, 0, 0)
 	}
-	return result.Format("20060102"), nil
+	return result.Format(format), nil
 }
 
 type RepDay []string
@@ -33,14 +33,14 @@ func (rd RepDay) CreateDate(now, date time.Time) (string, error) {
 	}
 
 	if numberOfDays == 1 && now.After(date) {
-		return now.Format("20060102"), nil
+		return now.Format(format), nil
 	}
 
 	result := date.AddDate(0, 0, numberOfDays)
 	for result.Before(now) || result.Equal(now) {
 		result = result.AddDate(0, 0, numberOfDays)
 	}
-	return result.Format("20060102"), nil
+	return result.Format(format), nil
 }
 
 type RepWeek []string
@@ -72,7 +72,7 @@ func (rw RepWeek) CreateDate(now, date time.Time) (string, error) {
 		}
 	}
 
-	return result.Format("20060102"), nil
+	return result.Format(format), nil
 }
 
 type RepAnyMonth []string
@@ -121,7 +121,7 @@ func (ram RepAnyMonth) CreateDate(now, date time.Time) (string, error) {
 		}
 	}
 
-	return result.Format("20060102"), nil
+	return result.Format(format), nil
 }
 
 type RepConcreteMonth []string
@@ -172,14 +172,14 @@ func (rcm RepConcreteMonth) CreateDate(now, date time.Time) (string, error) {
 		}
 	}
 
-	return result.Format("20060102"), nil
+	return result.Format(format), nil
 }
 
 func NextDate(now time.Time, date string, repeat string) (string, error) {
 	var result string
 	var dates Repeat
 
-	referenceDate, err := time.Parse("20060102", date)
+	referenceDate, err := time.Parse(format, date)
 	if err != nil {
 		return "", fmt.Errorf("wrong date format: %w", err)
 	}

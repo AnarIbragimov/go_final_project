@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,8 +13,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	password := os.Getenv("TODO_PASSWORD")
+	db, err := sql.Open("sqlite", dbName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
-	app := &App{DB: dbName, WebDir: "./web"}
+	app := &App{WebDir: "./web", DB: db, Password: password}
 	http.Handle("/", http.FileServer(http.Dir(app.WebDir)))
 	http.HandleFunc("/api/nextdate", app.TaskNextDateHandler)
 
@@ -22,12 +29,11 @@ func main() {
 		port = "7540"
 	}
 
-	password := os.Getenv("TODO_PASSWORD")
 	if password != "" {
 		http.HandleFunc("/api/signin", app.SignInHandler)
-		http.HandleFunc("/api/tasks", auth(app.TasksHandler))
-		http.HandleFunc("/api/task", auth(app.TaskHandler))
-		http.HandleFunc("/api/task/done", auth(app.TaskDoneHandler))
+		http.HandleFunc("/api/tasks", auth(app.TasksHandler, password))
+		http.HandleFunc("/api/task", auth(app.TaskHandler, password))
+		http.HandleFunc("/api/task/done", auth(app.TaskDoneHandler, password))
 	} else {
 		http.HandleFunc("/api/tasks", app.TasksHandler)
 		http.HandleFunc("/api/task", app.TaskHandler)

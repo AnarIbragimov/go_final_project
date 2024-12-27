@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -40,40 +38,9 @@ func verifyToken(token string, password string) bool {
 	return true
 }
 
-func (app *App) SignInHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	pass := os.Getenv("TODO_PASSWORD")
-
-	m := map[string]string{}
-	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
-		http.Error(w, `{"error": Server error}`, http.StatusInternalServerError)
-		return
-	}
-
-	if v, ok := m["password"]; !ok {
-		http.Error(w, `{"error": Server error}`, http.StatusInternalServerError)
-		return
-	} else if v != pass {
-		http.Error(w, `{"error": Wrong password}`, http.StatusUnauthorized)
-		return
-	}
-
-	token, err := createJWTToken(pass)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	response := map[string]any{"token": token}
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, `{"error": Server error}`, http.StatusInternalServerError)
-		return
-	}
-}
-
-func auth(next http.HandlerFunc) http.HandlerFunc {
+func auth(next http.HandlerFunc, pass string) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// смотрим наличие пароля
-		pass := os.Getenv("TODO_PASSWORD")
 		if len(pass) > 0 {
 			var jwt string // JWT-токен из куки
 			// получаем куку

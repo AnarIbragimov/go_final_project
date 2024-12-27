@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,16 +23,16 @@ func (t *Task) Validate() error {
 	}
 
 	if t.Date == "" {
-		t.Date = today.Format("20060102")
+		t.Date = today.Format(format)
 	}
 
-	referenceDate, err := time.Parse("20060102", t.Date)
+	referenceDate, err := time.Parse(format, t.Date)
 	if err != nil {
 		return fmt.Errorf("Wrong date format: %s", t.Date)
 	}
 
 	if referenceDate.Before(today) {
-		t.Date = today.Format("20060102")
+		t.Date = today.Format(format)
 	}
 
 	if t.Repeat == "" {
@@ -46,8 +47,9 @@ func (t *Task) Validate() error {
 }
 
 type App struct {
-	WebDir string
-	DB     string
+	WebDir   string
+	DB       *sql.DB
+	Password string
 }
 
 func (app *App) TaskHandler(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +204,7 @@ func (app *App) TaskNextDateHandler(w http.ResponseWriter, r *http.Request) {
 	date := r.FormValue("date")
 	repeat := r.FormValue("repeat")
 
-	nowTime, err := time.Parse("20060102", now)
+	nowTime, err := time.Parse(format, now)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
 		return
@@ -213,4 +215,33 @@ func (app *App) TaskNextDateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write([]byte(result))
+}
+
+func (app *App) SignInHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+
+	m := map[string]string{}
+	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
+		http.Error(w, `{"error": Server error}`, http.StatusInternalServerError)
+		return
+	}
+
+	if v, ok := m["password"]; !ok {
+		http.Error(w, `{"error": Server error}`, http.StatusInternalServerError)
+		return
+	} else if v != app.Password {
+		http.Error(w, `{"error": Wrong password}`, http.StatusUnauthorized)
+		return
+	}
+
+	token, err := createJWTToken(app.Password)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	response := map[string]any{"token": token}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, `{"error": Server error}`, http.StatusInternalServerError)
+		return
+	}
 }
